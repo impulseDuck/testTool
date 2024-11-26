@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会动的小黑猫</title>
+    <style>
+        body {
+            margin: 0;
+            background: #ffd54f;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .cat {
+            width: 100px;
+            height: 100px;
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s;
+            z-index: 2;
+        }
+
+        .cat-body {
+            width: 80px;
+            height: 80px;
+            background: #000;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .cat-eyes {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .eye {
+            width: 20px;
+            height: 20px;
+            background: #ffeb3b;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .cat-tail {
+            position: absolute;
+            bottom: 10px;
+            right: -20px;
+            width: 30px;
+            height: 40px;
+            background: #000;
+            border-radius: 15px;
+            transform-origin: top;
+        }
+
+        .cat-legs {
+            position: absolute;
+            bottom: -10px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .leg {
+            width: 10px;
+            height: 20px;
+            background: #000;
+            border-radius: 5px;
+        }
+
+        .dialog-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            width: 80%;
+            max-width: 30vw;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .chat-bubble {
+            width: 30vw;
+            position: absolute;
+            background: rgba(255,255,255,0.5);
+            border-radius: 10px;
+            padding: 10px;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .stats {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 10px;
+            z-index: 10;
+        }
+
+        .options {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 15px;
+            cursor: pointer;
+        }
+
+        .cat-animation {
+            animation: walk 0.5s infinite alternate;
+        }
+
+        @keyframes walk {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-5px); }
+        }
+
+        .jump-animation {
+            animation: jump 0.5s;
+        }
+
+        @keyframes jump {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-50px); }
+            100% { transform: translateY(0); }
+        }
+
+        .tail-animation {
+            animation: tailWag 1s infinite;
+        }
+
+        @keyframes tailWag {
+            0% { transform: rotate(-20deg); }
+            50% { transform: rotate(20deg); }
+            100% { transform: rotate(-20deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="stats">
+            心情: <span id="mood">开心</span><br>
+            饥饿: <span id="hunger">100</span>%<br>
+            好感: <span id="affection">0</span>
+        </div>
+        
+        <div class="dialog-box">
+            <div id="catDialog">喵~ </div>
+            <div class="options">
+                <button onclick="feed()">喂食</button>
+                <button onclick="play()">玩耍</button>
+                <button onclick="pet()">抚摸</button>
+                <button onclick="chat()">聊天</button>
+            </div>
+            <input type="text" id="chatInput" placeholder="和小猫聊天..." style="width: 80%; margin-top: 10px; padding: 5px;">
+        </div>
+    </div>
+
+    <script>
+        class Cat {
+            constructor() {
+                this.element = this.createCatElement();
+                this.x = window.innerWidth / 2;
+                this.y = window.innerHeight / 2;
+                this.targetX = this.x;
+                this.targetY = this.y;
+                this.speed = 3;
+                this.state = 'idle';
+                this.direction = 1; // 1 右边, -1 左边
+                this.chatBubble = null;
+                
+                this.stats = {
+                    mood: 100,
+                    hunger: 100,
+                    affection: 0
+                };
+
+                this.setupEventListeners();
+                this.startBehaviorLoop();
+                this.startStatsLoop();
+            }
+
+            createCatElement() {
+                const cat = document.createElement('div');
+                cat.className = 'cat';
+                cat.innerHTML = `
+                    <div class="chat-bubble"></div>
+                    <div class="cat-body">
+                        <div class="cat-eyes">
+                            <div class="eye"></div>
+                            <div class="eye"></div>
+                        </div>
+                        <div class="cat-tail"></div>
+                        <div class="cat-legs">
+                            <div class="leg"></div>
+                            <div class="leg"></div>
+                            <div class="leg"></div>
+                            <div class="leg"></div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('gameContainer').appendChild(cat);
+                return cat;
+            }
+
+            setupEventListeners() {
+                window.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'BUTTON' && !e.target.closest('.dialog-box')) {
+                        this.setTarget(e.clientX, e.clientY);
+                    }
+                });
+
+                this.element.addEventListener('click', () => {
+                    this.showEmotion('❤️');
+                    this.jump();
+                });
+
+                document.getElementById('chatInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.handleChat(e.target.value);
+                        e.target.value = '';
+                    }
+                });
+            }
+
+            setTarget(x, y) {
+                this.targetX = x;
+                this.targetY = y;
+                this.state = 'walking';
+                this.direction = this.targetX > this.x ? 1 : -1;
+            }
+
+            async handleChat(message) {
+                // 这里可以接入大模型API
+                // 示例响应:
+                // let response = await this.getMockAIResponse(message);
+                // this.showMessage(response);
+                const API_KEY = 'sk-6bf81382125949eca4e3620ae6785332'; // Replace with your API key
+                const BASE_URL = 'https://api.deepseek.com'; // Replace with your base URL
+                try {
+                    const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${API_KEY}`,
+                        },
+                        body: JSON.stringify({
+                            model: 'deepseek-chat', // Replace with the desired model
+                            messages: [
+                                { role: 'system', content: '你是一只可爱的小黑猫，性格活泼，喜欢用喵喵的语气说话' },
+                                { role: 'user', content: message }
+                            ]
+                        }),
+                    });
+
+                    const data = await response.json();
+                    const aiResponse = data.choices[0].message.content;
+                    console.log('AI response:', aiResponse);
+
+                    // Display AI response
+                    this.showMessage(aiResponse);
+                } catch (error) {
+                    console.error('Error calling AI API:', error);
+                    this.showMessage('喵~ 出了点问题，请稍后再试喵！');
+                }
+            }
+
+            getMockAIResponse(message) {
+                // 模拟AI响应
+                // 实际使用时替换为真实的AI API调用
+                const responses = {
+                    '你好': '喵~ 主人好啊！',
+                    '肚子饿': '喵！想吃小鱼干~',
+                    '想玩': '喵喵！来玩毛线球吧！',
+                    'default': '喵~ ' + message.substring(0, 10) + '...'
+                };
+
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        resolve(responses[message] || responses.default);
+                    }, 500);
+                });
+            }
+
+            showMessage(text) {
+                if (!this.chatBubble) {
+                    this.chatBubble = this.element.querySelector('.chat-bubble');
+                }
+                this.chatBubble.textContent = text;
+                this.chatBubble.style.opacity = '1';
+                
+                setTimeout(() => {
+                    this.chatBubble.style.opacity = '0';
+                }, 3000);
+            }
+
+            jump() {
+                this.element.classList.add('jump-animation');
+                setTimeout(() => {
+                    this.element.classList.remove('jump-animation');
+                }, 500);
+            }
+
+            showEmotion(emoji) {
+                const emotion = document.createElement('div');
+                emotion.style.position = 'absolute';
+                emotion.style.top = '-20px';
+                emotion.style.left = '50%';
+                emotion.style.transform = 'translateX(-50%)';
+                emotion.style.fontSize = '20px';
+                emotion.textContent = emoji;
+                emotion.style.transition = 'all 0.5s';
+                emotion.style.opacity = '1';
+                
+                this.element.appendChild(emotion);
+                
+                setTimeout(() => {
+                    emotion.style.opacity = '0';
+                    emotion.style.transform = 'translateX(-50%) translateY(-20px)';
+                    setTimeout(() => emotion.remove(), 500);
+                }, 500);
+            }
+
+            update() {
+                if (this.state === 'walking') {
+                    const dx = this.targetX - this.x;
+                    const dy = this.targetY - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance > this.speed) {
+                        this.x += (dx / distance) * this.speed;
+                        this.y += (dy / distance) * this.speed;
+                        this.element.classList.add('cat-animation');
+                    } else {
+                        this.state = 'idle';
+                        this.element.classList.remove('cat-animation');
+                    }
+                }
+
+                this.element.style.left = `${this.x - 50}px`;
+                this.element.style.top = `${this.y - 50}px`;
+                this.element.style.transform = `scaleX(${this.direction})`;
+            }
+
+            startBehaviorLoop() {
+                setInterval(() => {
+                    if (this.state === 'idle' && Math.random() < 0.02) {
+                        const randomX = Math.random() * window.innerWidth;
+                        const randomY = Math.random() * (window.innerHeight - 200);
+                        this.setTarget(randomX, randomY);
+                    }
+                }, 100);
+
+                requestAnimationFrame(this.update.bind(this));
+            }
+
+            startStatsLoop() {
+                setInterval(() => {
+                    this.stats.hunger = Math.max(0, this.stats.hunger - 1);
+                    if (this.stats.hunger < 30) {
+                        this.stats.mood = Math.max(0, this.stats.mood - 2);
+                        this.showEmotion('😿');
+                    }
+                    this.updateStats();
+                }, 10000);
+            }
+
+            updateStats() {
+                document.getElementById('mood').textContent = this.getMoodText();
+                document.getElementById('hunger').textContent = this.stats.hunger;
+                document.getElementById('affection').textContent = this.stats.affection;
+            }
+
+            getMoodText() {
+                if (this.stats.mood > 80) return "非常开心";
+                if (this.stats.mood > 60) return "开心";
+                if (this.stats.mood > 40) return "普通";
+                if (this.stats.mood > 20) return "不开心";
+                return "难过";
+            }
+        }
+
+        const cat = new Cat();
+
+        function feed() {
+            cat.stats.hunger = Math.min(100, cat.stats.hunger + 20);
+            cat.stats.mood = Math.min(100, cat.stats.mood + 10);
+            cat.stats.affection += 2;
+            cat.showEmotion('🐟');
+            cat.showMessage('喵！好吃！');
+            cat.updateStats();
+        }
+
+        function play() {
+            cat.stats.mood = Math.min(100, cat.stats.mood + 20);
+            cat.stats.hunger = Math.max(0, cat.stats.hunger - 10);
+            cat.stats.affection += 3;
+            cat.jump();
+            cat.showEmotion('🧶');
+            cat.showMessage('喵喵喵！真好玩！');
+            cat.updateStats();
+        }
+
+        function pet() {
+            cat.stats.mood = Math.min(100, cat.stats.mood + 15);
+            cat.stats.affection += 1;
+            cat.showEmotion('❤️');
+            cat.showMessage('咕噜咕噜~');
+            cat.updateStats();
+        }
+
+        function chat() {
+            const input = document.getElementById('chatInput');
+            if (input.value) {
+                cat.handleChat(input.value);
+                input.value = '';
+            }
+        }
+
+        // 启动动画循环
+        function animate() {
+            cat.update();
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
